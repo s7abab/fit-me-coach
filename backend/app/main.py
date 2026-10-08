@@ -8,3 +8,4 @@ def health():
     with get_conn() as conn:
         conn.execute("SELECT 1")
     return {"status": "ok", "db": "ok"}
+
