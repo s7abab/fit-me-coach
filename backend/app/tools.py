@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 from psycopg.rows import dict_row
 
 from app.retrieval import search
+from app.memory import save_memory
 
 TZ = ZoneInfo("Asia/Kolkata")
 MAX_DAYS = 30
@@ -170,6 +171,13 @@ def get_recovery_summary(conn, user_id, args):
         body["last_3_days"] = body.pop("days")[-3:]
     return {"sleep": sleep, "heart_and_activity": body}
 
+def remember(conn, user_id, args):
+    fact = str(args.get("fact", "")).strip()
+    if not 3 <= len(fact) <= 200:
+        return {"error": "fact must be 3-200 characters"}
+    save_memory(conn, user_id, fact)
+    return {"saved": fact}
+
 def search_guides(conn, user_id, args):
     query = str(args.get("query", "")).strip()
     if not query:
@@ -217,6 +225,15 @@ TOOLS = {
         "description": "Get the user's workouts for the last N days: name, type, duration and average heart rate.",
         "parameters": {"type": "object", "properties": {
             "days": {"type": "integer", "minimum": 1, "maximum": 30, "description": "Number of days (default 14)."}}},
+    },
+    "remember": {
+        "fn": remember,
+        "description": ("Save a lasting fact the USER told you about themselves that matters for future chats: "
+                        "goals, injuries, diet (e.g. vegetarian), schedule, preferences. "
+                        "Only save what the user said. Do not save your advice or their daily numbers."),
+        "parameters": {"type": "object", "properties": {
+            "fact": {"type": "string", "description": "A short fact in third person, e.g. 'Is vegetarian'."}},
+            "required": ["fact"]},
     },
     "search_guides": {
         "fn": search_guides,
