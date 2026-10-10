@@ -1,16 +1,6 @@
-import type { LastNight, Overview as OverviewData, Readiness } from "@/lib/api";
+import type { LastNight, Overview as OverviewData } from "@/lib/api";
 import { hoursMinutes, shortDate, signed, thousands } from "@/lib/format";
 import type { Tone } from "@/lib/status";
-
-const READINESS: Record<Readiness["level"], { label: string; tone: Tone }> = {
-  high: { label: "High", tone: "ok" },
-  moderate: { label: "Moderate", tone: "amber" },
-  low: { label: "Low", tone: "red" },
-};
-
-const SIGNALS: Record<Readiness["based_on"][number], string> = { hrv: "HRV", resting_hr: "resting HR", sleep: "sleep" };
-
-const LIST = new Intl.ListFormat("en", { type: "conjunction" });
 
 function Tile({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -51,18 +41,6 @@ function Meter({ percent, tone = "ok" }: { percent: number; tone?: Tone }) {
   );
 }
 
-function ReadinessTile({ readiness }: { readiness: Readiness | null }) {
-  if (!readiness) return <Empty label="Readiness" text="Needs a week of data" />;
-  const { label, tone } = READINESS[readiness.level];
-  return (
-    <Tile label="Readiness">
-      <div className="tile-value">{readiness.score}</div>
-      <Meter percent={readiness.score} tone={tone} />
-      <div className="tile-sub"><b className={`tone-${tone}`}>{label}</b> · estimate</div>
-    </Tile>
-  );
-}
-
 function CardioTile({ cardio }: { cardio: OverviewData["cardio"] }) {
   if (!cardio) return <Empty label="Weekly cardio" text="No zone minutes yet" />;
   const reached = cardio.week_minutes >= cardio.target_minutes;
@@ -100,7 +78,7 @@ function SleepTile({ sleep, today }: { sleep: LastNight | null; today: string })
   const summary = stages.map((s) => `${s.name} ${hoursMinutes(s.minutes!).join("h ")}m`).join(", ");
   const delta = sleep.normal_hours != null ? sleep.minutes / 60 - sleep.normal_hours : null;
   return (
-    <Tile label={sleep.date === today ? "Sleep · last night" : `Sleep · ${shortDate(sleep.date)}`}>
+    <Tile label={sleep.date === today ? "Last night" : `Sleep · ${shortDate(sleep.date)}`}>
       <div className="tile-value">{hours}<span>h</span> {minutes}<span>m</span></div>
       {stages.length > 1 ? (
         <div className="stages" role="img" aria-label={summary} title={summary}>
@@ -117,21 +95,11 @@ function SleepTile({ sleep, today }: { sleep: LastNight | null; today: string })
 export default function Overview({ overview }: { overview: OverviewData }) {
   // The API's "today" is the last day in the steps list; fall back to the browser's date
   const today = overview.steps?.days.at(-1)?.date ?? new Date().toLocaleDateString("en-CA");
-  const { readiness } = overview;
   return (
-    <>
-      <div className="tiles">
-        <ReadinessTile readiness={readiness} />
-        <CardioTile cardio={overview.cardio} />
-        <StepsTile steps={overview.steps} />
-        <SleepTile sleep={overview.sleep} today={today} />
-      </div>
-      {readiness && (
-        <p className="tiles-note">
-          Readiness is Fit Me Coach&apos;s own estimate, from your {LIST.format(readiness.based_on.map((s) => SIGNALS[s]))} compared
-          with your normal. It is not Google&apos;s readiness score.
-        </p>
-      )}
-    </>
+    <div className="tiles">
+      <CardioTile cardio={overview.cardio} />
+      <StepsTile steps={overview.steps} />
+      <SleepTile sleep={overview.sleep} today={today} />
+    </div>
   );
 }

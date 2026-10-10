@@ -7,12 +7,6 @@ type Turn = { id: number; question: string; response?: AskResponse; error?: stri
 
 const MAX_QUESTION = 1000;
 
-const STARTERS = [
-  "Why am I so tired this week?",
-  "Am I ready to train hard today?",
-  "How much sleep should I be getting?",
-];
-
 const TOOL_TAGS: Record<string, string> = {
   get_sleep: "Sleep",
   get_recovery_summary: "Recovery",
@@ -81,7 +75,13 @@ function Reply({ response }: { response: AskResponse }) {
   );
 }
 
-export default function Chat({ children }: { children: ReactNode }) {
+type Props = {
+  starters: string[];
+  open: boolean; // phones: whether the coach is showing over the dashboard
+  onClose: () => void;
+};
+
+export default function Chat({ starters, open, onClose }: Props) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
@@ -93,6 +93,11 @@ export default function Chat({ children }: { children: ReactNode }) {
     if (turns.length) endRef.current?.scrollIntoView({ block: "end" });
   }, [turns]);
 
+  // Opened from the "Ask your coach" bar on a phone: go straight to typing
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
+
   // Grow the input with its text, up to the max-height set in CSS
   useEffect(() => {
     const el = inputRef.current;
@@ -101,7 +106,7 @@ export default function Chat({ children }: { children: ReactNode }) {
     el.style.height = `${el.scrollHeight}px`;
     // Only show a scrollbar once the text is taller than the max-height
     el.style.overflowY = el.scrollHeight > el.clientHeight ? "auto" : "hidden";
-  }, [draft]);
+  }, [draft, open]); // `open`: a hidden input measures as zero, so measure again once it shows
 
   async function send(text: string) {
     const question = text.trim();
@@ -140,62 +145,68 @@ export default function Chat({ children }: { children: ReactNode }) {
   }
 
   return (
-    <main className="coach">
-      <div className="scroll">
-        <div className="column">
-          {children}
+    <aside className="coach" data-open={open} aria-label="Coach">
+      <header className="coach-head">
+        <h2>Coach</h2>
+        <div className="coach-actions">
+          {turns.length > 0 && !pending && <button type="button" onClick={reset}>New chat</button>}
+          <button type="button" className="coach-close" onClick={onClose} aria-label="Close coach">
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+              <path d="M3.5 3.5l9 9M12.5 3.5l-9 9" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+      </header>
 
-          {turns.length === 0 ? (
+      <div className="scroll">
+        {turns.length === 0 ? (
+          <div className="coach-empty">
+            <p>Ask about your sleep, recovery or training. Answers use your own data and cite published guidelines.</p>
             <ul className="starters" aria-label="Suggested questions">
-              {STARTERS.map((s) => (
+              {starters.map((s) => (
                 <li key={s}><button type="button" onClick={() => send(s)}>{s}</button></li>
               ))}
             </ul>
-          ) : (
-            <div className="thread">
-              {turns.map((turn) => (
-                <article key={turn.id} className="turn">
-                  <p className="question">{turn.question}</p>
-                  {turn.response ? (
-                    <Reply response={turn.response} />
-                  ) : turn.error ? (
-                    <p className="answer-error">{turn.error}</p>
-                  ) : (
-                    <p className="answer-pending" role="status">Reading your data</p>
-                  )}
-                </article>
-              ))}
-              {!pending && (
-                <button type="button" className="reset" onClick={reset}>Start a new conversation</button>
-              )}
-            </div>
-          )}
-          <div ref={endRef} />
-        </div>
+          </div>
+        ) : (
+          <div className="thread">
+            {turns.map((turn) => (
+              <article key={turn.id} className="turn">
+                <p className="question">{turn.question}</p>
+                {turn.response ? (
+                  <Reply response={turn.response} />
+                ) : turn.error ? (
+                  <p className="answer-error">{turn.error}</p>
+                ) : (
+                  <p className="answer-pending" role="status">Reading your data</p>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
+        <div ref={endRef} />
       </div>
 
       <form className="composer" onSubmit={onSubmit}>
-        <div className="column">
-          <div className="field">
-            <textarea
-              ref={inputRef}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={onKeyDown}
-              rows={1}
-              maxLength={MAX_QUESTION}
-              placeholder="Ask your coach"
-              aria-label="Question for your coach"
-            />
-            <button type="submit" disabled={pending || !draft.trim()} aria-label="Send">
-              <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-                <path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          </div>
-          <p className="fine">Cites published guidelines. Not medical advice.</p>
+        <div className="field">
+          <textarea
+            ref={inputRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={onKeyDown}
+            rows={1}
+            maxLength={MAX_QUESTION}
+            placeholder="Ask your coach"
+            aria-label="Question for your coach"
+          />
+          <button type="submit" disabled={pending || !draft.trim()} aria-label="Send">
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+              <path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
         </div>
+        <p className="fine">Cites published guidelines. Not medical advice.</p>
       </form>
-    </main>
+    </aside>
   );
 }

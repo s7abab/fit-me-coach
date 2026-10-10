@@ -76,7 +76,7 @@ export default function Trends({ data, days, onDays }: Props) {
   const steps = metrics?.avg_steps ?? null;
 
   return (
-    <aside className="trends" aria-label="Trends">
+    <section className="trends" aria-label="Trends">
       <div className="trends-head">
         <h2>Trends</h2>
         <div className="segmented" role="group" aria-label="Period">
@@ -87,7 +87,7 @@ export default function Trends({ data, days, onDays }: Props) {
       </div>
 
       {data && (
-        <>
+        <div className="trend-grid">
           <Card title="Sleep" aside={sleep ? `${days}-day avg ${fixed(sleep.avg_hours)} h` : null}>
             {night && (
               <Summary
@@ -186,8 +186,8 @@ export default function Trends({ data, days, onDays }: Props) {
               </ul>
             ) : <p className="empty">No workouts logged in this period</p>}
           </Card>
-        </>
+        </div>
       )}
-    </aside>
+    </section>
   );
 }

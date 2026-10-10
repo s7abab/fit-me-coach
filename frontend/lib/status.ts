@@ -1,4 +1,4 @@
-import type { Metrics, Sleep } from "./api";
+import type { Metrics, Overview, Sleep } from "./api";
 import { signed } from "./format";
 
 export type Tone = "ok" | "amber" | "red";
@@ -50,6 +50,31 @@ export function hrvTone(ms: number, normal: number | null): Tone {
 }
 
 const TONE_LABEL: Record<Tone, string> = { ok: "On track", amber: "Below your normal", red: "Needs attention" };
+
+/** Where a value sits against the user's normal, as 0-100 along a bar whose middle is "normal". */
+export function rangePosition(value: number, normal: number) {
+  const SPAN = 0.3; // the bar covers normal ±30%
+  const deviation = (value - normal) / normal;
+  return 50 + (Math.max(-SPAN, Math.min(SPAN, deviation)) / SPAN) * 50;
+}
+
+const DEFAULT_STARTERS = [
+  "How am I doing this week?",
+  "Am I ready to train hard today?",
+  "How much sleep should I be getting?",
+];
+
+/** Questions worth asking the coach today, most pressing first: built from what the data shows. */
+export function buildStarters(overview: Overview | null) {
+  if (!overview) return DEFAULT_STARTERS;
+  const starters: string[] = [];
+  const { readiness, sleep, cardio } = overview;
+  if (readiness && readiness.level !== "high") starters.push(`Why is my readiness ${readiness.level} today?`);
+  if (sleep && sleep.minutes / 60 < SHORT_NIGHT_HOURS) starters.push("How can I get my sleep back on track?");
+  if (readiness?.level === "high") starters.push("What kind of training suits today?");
+  if (cardio && cardio.week_minutes < cardio.target_minutes) starters.push("How can I reach my weekly cardio goal?");
+  return [...starters, ...DEFAULT_STARTERS].slice(0, 3);
+}
 
 /** Today's read at the top of the coach view: only what is off, worst first. */
 export function buildStatus(sleep: Sleep | null, metrics: Metrics | null) {

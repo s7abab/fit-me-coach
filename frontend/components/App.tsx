@@ -4,16 +4,15 @@ import { useEffect, useState } from "react";
 import { signOutOfApp } from "@/app/actions";
 import { getDashboard, type Dashboard } from "@/lib/api";
 import { headerDate } from "@/lib/format";
+import { buildStarters } from "@/lib/status";
 import Brief from "./Brief";
 import Chat from "./Chat";
 import Trends from "./Trends";
 
-type Tab = "coach" | "trends";
-
 const SYNC_POLL_MS = 4000;
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("coach"); // phones show one pane at a time
+  const [coachOpen, setCoachOpen] = useState(false); // phones: the coach opens over the dashboard
   const [days, setDays] = useState(14);
   const [data, setData] = useState<Dashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -43,13 +42,9 @@ export default function App() {
   }, [syncing, data]);
 
   return (
-    <div className="app" data-tab={tab}>
+    <div className="app">
       <header className="top">
         <span className="wordmark">fit me<i /></span>
-        <nav className="tabs" aria-label="View">
-          <button type="button" aria-pressed={tab === "coach"} onClick={() => setTab("coach")}>Coach</button>
-          <button type="button" aria-pressed={tab === "trends"} onClick={() => setTab("trends")}>Trends</button>
-        </nav>
         <div className="top-end">
           <span className="top-date">{today}</span>
           <form action={signOutOfApp}>
@@ -58,11 +53,27 @@ export default function App() {
         </div>
       </header>
 
-      <Chat>
-        <Brief data={data} error={error} />
-      </Chat>
+      <main className="dash">
+        <div className="dash-inner">
+          <Brief data={data} error={error} />
+          <Trends data={data} days={days} onDays={setDays} />
+        </div>
+      </main>
 
-      <Trends data={data} days={days} onDays={setDays} />
+      <Chat
+        starters={buildStarters(data?.connection.status === "ready" ? data.overview : null)}
+        open={coachOpen} onClose={() => setCoachOpen(false)}
+      />
+
+      {/* Phones only: the way into the coach */}
+      <button type="button" className="ask-bar" onClick={() => setCoachOpen(true)}>
+        Ask your coach
+        <span aria-hidden="true">
+          <svg viewBox="0 0 16 16" width="16" height="16">
+            <path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+      </button>
     </div>
   );
 }

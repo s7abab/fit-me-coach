@@ -75,7 +75,14 @@ export type Connection = {
 export type Readiness = {
   score: number; // 0-100, our own estimate
   level: "low" | "moderate" | "high";
-  based_on: ("hrv" | "resting_hr" | "sleep")[];
+  signals: Signal[]; // what the score was built from
+};
+
+export type Signal = {
+  key: "sleep" | "resting_hr" | "hrv";
+  value: number;
+  normal: number; // the user's own average over the month before
+  score: number; // 0-100, where 75 means "same as normal"
 };
 
 export type LastNight = {

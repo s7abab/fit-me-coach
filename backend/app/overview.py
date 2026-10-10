@@ -21,22 +21,28 @@ def readiness_score(hrv=None, hrv_normal=None, resting_hr=None, resting_hr_norma
                     sleep_hours=None, sleep_normal=None):
     """Our own 0-100 estimate of how recovered the user is. NOT Google's readiness score (their API
     does not share it). Each signal scores 75 when it matches the user's normal, more when it is
-    better and less when it is worse. Returns None unless at least two signals are available."""
-    parts = {}
-    if hrv and hrv_normal:
-        parts["hrv"] = _clamp(75 + (hrv / hrv_normal - 1) * 250)            # 10% above normal = 100, 30% below = 0
-    if resting_hr and resting_hr_normal:
-        parts["resting_hr"] = _clamp(75 - (resting_hr - resting_hr_normal) * 7.5)   # 10 bpm above normal = 0
+    better and less when it is worse. Returns None unless at least two signals are available.
+    `signals` lists what the score was built from, so the app can show why it is high or low."""
+    signals = []
     if sleep_hours is not None and sleep_normal:
-        parts["sleep"] = _clamp(75 + (sleep_hours - sleep_normal) * 25)     # 3 hours short = 0
-    if len(parts) < 2:
+        signals.append({"key": "sleep", "value": round(sleep_hours, 1), "normal": round(sleep_normal, 1),
+                        "score": _clamp(75 + (sleep_hours - sleep_normal) * 25)})        # 3 hours short = 0
+    if resting_hr and resting_hr_normal:
+        signals.append({"key": "resting_hr", "value": round(resting_hr), "normal": round(resting_hr_normal),
+                        "score": _clamp(75 - (resting_hr - resting_hr_normal) * 7.5)})   # 10 bpm above normal = 0
+    if hrv and hrv_normal:
+        signals.append({"key": "hrv", "value": round(hrv), "normal": round(hrv_normal),
+                        "score": _clamp(75 + (hrv / hrv_normal - 1) * 250)})             # 30% below normal = 0
+    if len(signals) < 2:
         return None
 
-    score = round(sum(parts[k] * WEIGHTS[k] for k in parts) / sum(WEIGHTS[k] for k in parts))
+    score = round(sum(s["score"] * WEIGHTS[s["key"]] for s in signals) / sum(WEIGHTS[s["key"]] for s in signals))
+    for s in signals:
+        s["score"] = round(s["score"])
     return {
         "score": score,
         "level": "high" if score >= 70 else "moderate" if score >= 40 else "low",
-        "based_on": sorted(parts),
+        "signals": signals,
     }
 
 
