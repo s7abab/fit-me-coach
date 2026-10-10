@@ -2,14 +2,14 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.agent import run_agent
 from app.config import settings
 from app.db import get_conn
-
 from app.schema import AskRequest, AskResponse
+from app.tools import get_daily_metrics, get_sleep, get_user_profile, get_workouts
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -60,6 +60,7 @@ def ask(req: AskRequest):
     # Never log the question: it's private health information
     logger.info("ask safety=%s tools=%d latency_ms=%d", result["safety"], len(result["tool_calls"]), latency_ms)
     return AskResponse(**result, latency_ms=latency_ms)
+
 
 @app.get("/dashboard")
 def dashboard(days: int = Query(14, ge=1, le=30)):

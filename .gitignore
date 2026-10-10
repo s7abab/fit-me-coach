@@ -3,3 +3,6 @@
 __pycache__/
 node_modules/
 data/fitbit_export/
+.next/
+next-env.d.ts
+*.tsbuildinfo
