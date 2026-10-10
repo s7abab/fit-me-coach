@@ -1,12 +1,21 @@
-from functools import lru_cache
-from sentence_transformers import SentenceTransformer
+from pgvector import Vector
 
-MODEL_NAME = "BAAI/bge-small-en-v1.5"   # 384 numbers per text, handles longer chunks than MiniLM
+from app.config import settings
+from app.voyage import post
 
-@lru_cache
-def get_model():
-    # Loads the model once and reuses it
-    return SentenceTransformer(MODEL_NAME)
+DIMENSIONS = 1024   # must match the vector(...) size of chunks.embedding
+BATCH_SIZE = 100    # texts per request, well under Voyage's per-request limits
 
-def embed(texts):
-    return get_model().encode(texts, normalize_embeddings=True, batch_size=32)
+
+def embed(texts, input_type="document"):
+    # input_type is "document" for the chunks we store, "query" for a user's question
+    vectors = []
+    for start in range(0, len(texts), BATCH_SIZE):
+        res = post("embeddings", {
+            "model": settings.voyage_embed_model,
+            "input": texts[start:start + BATCH_SIZE],
+            "input_type": input_type,
+            "output_dimension": DIMENSIONS,
+        })
+        vectors += [Vector(item["embedding"]) for item in sorted(res["data"], key=lambda d: d["index"])]
+    return vectors

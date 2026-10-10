@@ -4,7 +4,6 @@ psycopg[binary]
 pgvector
 pydantic-settings
 openai
-sentence-transformers
 pypdf
 pymupdf4llm
 httpx

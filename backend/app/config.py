@@ -9,7 +9,14 @@ class Settings(BaseSettings):
     llm_api_key: str
     llm_base_url: str
     llm_model: str = "openai.gpt-oss-120b"
-    warmup_models: bool = True
+
+    # Voyage AI: embeddings and reranking for guideline search
+    voyage_api_key: str
+    # Keys made in MongoDB Atlas use https://ai.mongodb.com/v1 instead
+    voyage_base_url: str = "https://api.voyageai.com/v1"
+    voyage_embed_model: str = "voyage-3.5"
+    voyage_rerank_model: str = "rerank-3-lite"
+
     cors_origins: list[str] = ["http://localhost:3000"]
 
     # Signs the short-lived token the Next.js server sends with every request. Same value as API_JWT_SECRET in frontend/.env.

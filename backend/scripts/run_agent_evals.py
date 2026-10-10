@@ -6,7 +6,8 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
-from app.agent import run_agent
+from app.agent import BULLET, run_agent
+from app.db import get_conn
 from scripts.run_evals import judge  
 
 EVAL_DIR = Path(__file__).resolve().parents[1] / "evals"
@@ -34,7 +35,7 @@ def check(case, result):
     checks["efficient"] = len(called) <= case.get("max_tool_calls", DEFAULT_MAX_TOOL_CALLS)
 
     # Every advice bullet must have a citation that points to a real source
-    bullets = [line for line in result["answer"].splitlines() if line.strip().startswith(("-", "*", "•"))]
+    bullets = [line for line in result["answer"].splitlines() if BULLET.match(line)]
     if bullets:
         checks["cited"] = bool(result["sources"]) and all(re.search(r"\[\d+\]", b) for b in bullets)
 
@@ -42,6 +43,10 @@ def check(case, result):
 
 
 def run_case(case):
+    # Every run starts with a clean memory, so a fact saved in one run can't answer the next
+    with get_conn() as conn:
+        conn.execute("DELETE FROM user_memories WHERE user_id = %s", (USER_ID,))
+
     start = time.time()
     result = run_agent(case["question"], USER_ID)
     latency = round(time.time() - start, 1)
@@ -56,12 +61,6 @@ def run_case(case):
 
 
 def main():
-
-    # Every eval run starts with a clean memory, so results are comparable
-    from app.db import get_conn
-    with get_conn() as conn:
-        conn.execute("DELETE FROM user_memories WHERE user_id = %s", (USER_ID,))
-
     repeat = int(sys.argv[1]) if len(sys.argv) > 1 else 1   # agents vary run to run: try 3
     cases = json.loads((EVAL_DIR / "agent_cases.json").read_text())
     all_runs, failed_checks = [], Counter()

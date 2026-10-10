@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS chunks (
     document_id  bigint NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
     page         int,
     content      text NOT NULL,
-    embedding    vector(384),
+    embedding    vector(1024),
     tsv          tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED
 );
 

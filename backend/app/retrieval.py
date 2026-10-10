@@ -1,15 +1,10 @@
-from functools import lru_cache
-from sentence_transformers import CrossEncoder
+from app.config import settings
 from app.embeddings import embed
+from app.voyage import post
 
 # Columns we want for every chunk: id, text, page, document title, document link
 COLUMNS = "c.id, c.content, c.page, d.title, d.source_url"
 FROM = "FROM chunks c JOIN documents d ON d.id = c.document_id"
-
-
-@lru_cache
-def get_reranker():
-    return CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
 
 
 def _vector_search(conn, q_vec, n):
@@ -30,7 +25,7 @@ def _keyword_search(conn, question, n):
 
 
 def search(conn, question, k=5, candidates=20):
-    q_vec = embed([question])[0]
+    q_vec = embed([question], input_type="query")[0]
 
     # Step 1: hybrid search, merging both lists with RRF
     scores, rows = {}, {}
@@ -45,8 +40,14 @@ def search(conn, question, k=5, candidates=20):
         return []
 
     # Step 2: rerank the shortlist and keep the best k
-    rerank_scores = get_reranker().predict([(question, rows[i][1]) for i in shortlist])
-    best = sorted(zip(shortlist, rerank_scores), key=lambda x: x[1], reverse=True)[:k]
+    # Voyage returns the top k already sorted, each with its position in the list we sent
+    res = post("rerank", {
+        "model": settings.voyage_rerank_model,
+        "query": question,
+        "documents": [rows[i][1] for i in shortlist],
+        "top_k": k,
+    })
+    best = [(shortlist[r["index"]], r["relevance_score"]) for r in res["data"]]
 
     return [
         {"id": i, "content": rows[i][1], "page": rows[i][2], "title": rows[i][3], "url": rows[i][4], "score": float(s)}

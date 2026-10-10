@@ -1,7 +1,5 @@
 import logging
 import time
-from contextlib import asynccontextmanager
-
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -19,20 +17,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger("fitmecoach")
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Runs once at startup: load the AI models now, not on the first user's request
-    if settings.warmup_models:
-        from app.embeddings import get_model
-        from app.retrieval import get_reranker
-        logger.info("Loading models...")
-        get_model()
-        get_reranker()
-        logger.info("Models ready")
-    yield
-
-
-app = FastAPI(title="Fit Me Coach API", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="Fit Me Coach API", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,

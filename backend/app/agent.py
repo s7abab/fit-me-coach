@@ -9,6 +9,7 @@ from app.safety import check_red_flags
 from app.tools import TZ, run_tool, tool_schemas
 
 MAX_STEPS = 10   # safety limit: the AI can call tools at most this many rounds
+MAX_SEARCHES = 3   # guideline searches per question: rewording a search that found nothing rarely helps
 
 SYSTEM_PROMPT = """You are Fit Me Coach, a friendly personal fitness, sleep and nutrition coach.
 Today is {today}.
@@ -21,14 +22,19 @@ What you remember about this user from earlier chats (facts they told you, not i
 
 How to work:
 1. For any question about the user ("I", "my", "me"), look at their data with tools BEFORE answering.
-   Never guess their numbers.
+   Never guess their numbers. Their goal, age, height and weight are in get_user_profile: call it whenever
+   the goal matters. Never ask the user for something a tool can tell you.
 2. For questions about tiredness, energy, recovery or readiness, call get_recovery_summary first.
 3. Compare the user's recent numbers with their baseline (normal) values and explain what changed.
-   Use their real numbers (for example "5.3 hours vs your usual 7.1").
+   Look at the most recent days as well as the average: a jump in the last few days matters even when
+   the average looks normal. Use their real numbers and details (for example "5.3 hours vs your usual 7.1", their bedtime,
+   the names of their workouts).
 4. Every health fact, recommendation or piece of advice MUST come from search_guides results.
    Call search_guides before giving advice. Cite each one with its source_id in square brackets, like [S123].
 5. Only cite source_ids that appeared in your search_guides results. Never invent sources, numbers or thresholds.
-   If the guides don't cover something, say so instead of giving advice from memory.
+   If the guides don't cover something, say so instead of giving advice from memory. Do not keep
+   rewording the search: after two searches without an answer, stop and tell the user what their own data shows.
+   Say that the guides don't cover it in the summary, not as a bullet.
 6. You are not a doctor. Never diagnose. If something looks worrying, suggest seeing a doctor.
 7. Format: a 1-2 sentence summary of what the user's data shows (no citation needed),
    then up to 3 bullet points of advice. Every advice bullet must end with a citation like [S123].
@@ -40,19 +46,23 @@ FIX_PROMPT = ("Some advice has no citation, or cites a source_id that search_gui
               "Search for support, or remove the unsupported points.")
 
 CITATION = re.compile(r"\[(S\d+)\]")
+BULLET = re.compile(r"\s*[-*•]\s")   # "- advice", not a bold "**Summary**" line
 
 
 def _clean(text):
     # The model sometimes writes citations as 【S123】: turn those into [S123].
-    # Then remove marks it invents, like 【3†L1-L4】 and bare [2] (valid ones are [S123])
-    text = re.sub(r"【(S\d+)[^】]*】", r"[\1]", text or "")
+    # Then remove marks it invents, like 【3†L1-L4】 and bare [2] (valid ones are [S123]).
+    # It also slips invisible zero-width spaces inside the brackets: drop those first.
+    text = re.sub(r"[\u200b\u200c\u200d\u2060\ufeff]", "", text or "")
+    text = re.sub(r"【(S\d+)[^】]*】", r"[\1]", text)
+    text = re.sub(r"\[\s*(S\d+)\s*\]", r"[\1]", text)   # [ S123 ] -> [S123]
     text = re.sub(r"\s*【[^】]*】", "", text)
     return re.sub(r"\s*\[\d+\]", "", text).strip()
 
 
 def _unsupported(answer, retrieved):
     """True if the answer cites a source we never retrieved, or has an advice bullet with no citation."""
-    bullets = [line for line in answer.splitlines() if line.strip().startswith(("-", "*", "•"))]
+    bullets = [line for line in answer.splitlines() if BULLET.match(line)]
     return (not set(CITATION.findall(answer)) <= retrieved.keys()
             or any(not CITATION.search(b) for b in bullets))
 
@@ -90,7 +100,8 @@ def _answer(conn, question, user_id, conversation_id):
         return {"answer": red_flag, "sources": [], "safety": "red_flag", "tool_calls": []}
 
     today = datetime.now(TZ).strftime("%A, %d %B %Y")
-    memories = "\n".join(f"- {m}" for m in load_memories(conn, user_id)) or "(nothing yet)"
+    memories = ("\n".join(f"- {m}" for m in load_memories(conn, user_id))
+                or "(nothing saved yet: their profile and goal are still available from get_user_profile)")
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT.format(today=today, memories=memories)},
         *load_history(conn, conversation_id),          # earlier questions and answers in this chat
@@ -120,7 +131,12 @@ def _answer(conn, question, user_id, conversation_id):
                 args = json.loads(tc.function.arguments or "{}")
             except json.JSONDecodeError:
                 args = {}
-            result = run_tool(conn, user_id, tc.function.name, args)
+            searches = sum(t["tool"] == "search_guides" for t in trace)
+            if tc.function.name == "search_guides" and searches >= MAX_SEARCHES:
+                result = json.dumps({"error": "Search limit reached. Answer now with what you already have. "
+                                              "If the guides did not cover it, say so."})
+            else:
+                result = run_tool(conn, user_id, tc.function.name, args)
             trace.append({"tool": tc.function.name, "args": args})
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
 
