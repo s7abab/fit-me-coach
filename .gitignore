@@ -7,3 +7,5 @@ data/fitbit_export/
 .next/
 next-env.d.ts
 *.tsbuildinfo
+.neon
+.claude
