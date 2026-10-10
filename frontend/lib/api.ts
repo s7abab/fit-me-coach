@@ -66,7 +66,41 @@ export type Profile = {
 // Each tool returns {error: "..."} instead of data when the period is empty
 type OrError<T> = T | { error: string };
 
+// none: never connected · syncing: first import running · error: Google could not be read · expired: sign in again
+export type Connection = {
+  status: "none" | "syncing" | "ready" | "error" | "expired";
+  last_synced_at: string | null;
+};
+
+export type Readiness = {
+  score: number; // 0-100, our own estimate
+  level: "low" | "moderate" | "high";
+  based_on: ("hrv" | "resting_hr" | "sleep")[];
+};
+
+export type LastNight = {
+  date: string;
+  minutes: number;
+  normal_hours: number | null;
+  bedtime: string;
+  wake_time: string;
+  deep_minutes: number | null;
+  rem_minutes: number | null;
+  light_minutes: number | null;
+  awake_minutes: number | null;
+};
+
+// Today at a glance. Each part is null until there is data for it.
+export type Overview = {
+  readiness: Readiness | null;
+  cardio: { week_minutes: number; target_minutes: number; days: { date: string; minutes: number | null }[] } | null;
+  steps: { today: number | null; avg_7d: number | null; days: { date: string; steps: number | null }[] } | null;
+  sleep: LastNight | null;
+};
+
 export type Dashboard = {
+  connection: Connection;
+  overview: Overview;
   profile: OrError<Profile>;
   sleep: OrError<Sleep>;
   metrics: OrError<Metrics>;

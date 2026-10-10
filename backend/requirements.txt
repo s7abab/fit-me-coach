@@ -7,4 +7,7 @@ openai
 sentence-transformers
 pypdf
 pymupdf4llm
+httpx
+pyjwt
+cryptography
 pytest

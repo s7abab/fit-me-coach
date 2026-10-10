@@ -2,13 +2,16 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.agent import run_agent
+from app.auth import current_user
 from app.config import settings
 from app.db import get_conn
-from app.schema import AskRequest, AskResponse
+from app.health_sync import claim_sync, connection_state, save_connection, sync_user
+from app.overview import get_overview
+from app.schema import AskRequest, AskResponse, GoogleHealthTokens
 from app.tools import get_daily_metrics, get_sleep, get_user_profile, get_workouts
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -46,11 +49,19 @@ def health():
     return {"status": "ok", "db": "ok"}
 
 
+@app.put("/connections/google-health")
+def connect_google_health(tokens: GoogleHealthTokens, user_id: int = Depends(current_user)):
+    """Called by the Next.js server right after Google sign-in, with the refresh token Google issued."""
+    with get_conn() as conn:
+        connected = save_connection(conn, user_id, tokens.refresh_token, tokens.scope.split())
+    return {"connected": connected}
+
+
 @app.post("/ask", response_model=AskResponse)
-def ask(req: AskRequest):
+def ask(req: AskRequest, user_id: int = Depends(current_user)):
     start = time.perf_counter()
     try:
-        result = run_agent(req.question, settings.demo_user_id, req.conversation_id)
+        result = run_agent(req.question, user_id, req.conversation_id)
     except Exception:
         # Full error goes to the logs; the user gets a clean message
         logger.exception("Agent failed")
@@ -63,11 +74,19 @@ def ask(req: AskRequest):
 
 
 @app.get("/dashboard")
-def dashboard(days: int = Query(14, ge=1, le=30)):
-    user_id = settings.demo_user_id
+def dashboard(background: BackgroundTasks, days: int = Query(14, ge=1, le=30), user_id: int = Depends(current_user)):
     args = {"days": days}
     with get_conn() as conn:
+        # Opening the dashboard is what keeps the data fresh
+        sync_days = claim_sync(conn, user_id)
+        if sync_days is not None:
+            if connection_state(conn, user_id)["status"] == "syncing":
+                background.add_task(sync_user, user_id, sync_days)   # first import is slow: the app polls
+            else:
+                sync_user(user_id, sync_days)                        # a few recent days: quick enough to wait for
         return {
+            "connection": connection_state(conn, user_id),
+            "overview": get_overview(conn, user_id),
             "profile": get_user_profile(conn, user_id, {}),
             "sleep": get_sleep(conn, user_id, args),
             "metrics": get_daily_metrics(conn, user_id, args),

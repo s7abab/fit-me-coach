@@ -14,10 +14,12 @@ type Props = {
   normal?: number | null; // the user's baseline: dashed line labelled at its end
   guide?: { value: number; label: string }; // a fixed threshold, drawn the same way
   flag?: (value: number) => boolean; // marks a point as below normal (amber)
+  flagLabel?: string; // what an amber point means, shown under the chart when there is one
 };
 
-const HEIGHT = 148;
-const M = { top: 10, right: 78, bottom: 24, left: 30 };
+const HEIGHT = 164;
+const M = { top: 26, right: 78, bottom: 24, left: 30 }; // the top margin leaves room for the day readout
+const TIP_HALF_WIDTH = 56;
 const LABEL_GAP = 12;
 
 function niceStep(range: number, count: number) {
@@ -40,11 +42,13 @@ function useWidth() {
   return [ref, width] as const;
 }
 
-export default function Chart({ data, kind = "line", label, unit, format, normal, guide, flag }: Props) {
+export default function Chart({ data, kind = "line", label, unit, format, normal, guide, flag, flagLabel }: Props) {
   const [ref, width] = useWidth();
+  const [active, setActive] = useState<number | null>(null); // the day under the pointer or finger
   const values = data.flatMap((d) => (d.value == null ? [] : [d.value]));
 
   let body = null;
+  let tip = null;
   if (width > 0 && values.length > 0) {
     const refs = [normal, guide?.value].filter((v): v is number => v != null);
     const all = [...values, ...refs];
@@ -80,8 +84,6 @@ export default function Chart({ data, kind = "line", label, unit, format, normal
 
     // Labels sit at the right end of what they describe; nudge them apart if they collide
     const labels: { y: number; text: string; className: string }[] = [];
-    if (kind === "line" && last?.value != null)
-      labels.push({ y: y(last.value), text: `${format(last.value)} ${unit}`, className: "chart-end" });
     if (normal != null) labels.push({ y: y(normal), text: `Normal ${format(normal)}`, className: "chart-ref" });
     if (guide) labels.push({ y: y(guide.value), text: guide.label, className: "chart-ref" });
     labels.sort((a, b) => a.y - b.y);
@@ -89,8 +91,29 @@ export default function Chart({ data, kind = "line", label, unit, format, normal
       if (labels[i].y - labels[i - 1].y < LABEL_GAP) labels[i].y = labels[i - 1].y + LABEL_GAP;
 
     const right = M.left + plotW;
+    const point = active != null ? data[active] : null;
+    if (point && active != null) {
+      tip = (
+        <div className="chart-tip" style={{ left: Math.max(TIP_HALF_WIDTH, Math.min(width - TIP_HALF_WIDTH, x(active))) }}>
+          {shortDate(point.date)} · {point.value == null ? "no reading" : <b>{format(point.value)} {unit}</b>}
+        </div>
+      );
+    }
+
+    const pointAt = (clientX: number, svg: SVGSVGElement) => {
+      const i = Math.floor((clientX - svg.getBoundingClientRect().left - M.left) / band);
+      setActive(i >= 0 && i < data.length ? i : null);
+    };
+
     body = (
-      <svg width={width} height={HEIGHT} role="img" aria-label={`${label}, last ${data.length} days`}>
+      <svg
+        width={width} height={HEIGHT} role="img"
+        aria-label={`${label}, last ${data.length} days${last?.value != null ? `, latest ${format(last.value)} ${unit}` : ""}`}
+        onPointerMove={(e) => pointAt(e.clientX, e.currentTarget)}
+        onPointerDown={(e) => pointAt(e.clientX, e.currentTarget)}
+        // A finger lifting also "leaves": keep the readout on touch screens until the next tap
+        onPointerLeave={(e) => { if (e.pointerType === "mouse") setActive(null); }}
+      >
         {ticks.map((t) => (
           <g key={t}>
             <line className="chart-grid" x1={M.left} x2={right} y1={y(t)} y2={y(t)} />
@@ -141,19 +164,24 @@ export default function Chart({ data, kind = "line", label, unit, format, normal
           </text>
         ))}
 
-        {/* Hover readout per day, using the browser's own tooltip */}
-        {data.map((d, i) => (
-          <rect key={d.date} x={M.left + i * band} y={M.top} width={band} height={plotH} fill="transparent">
-            <title>{`${shortDate(d.date)} · ${d.value == null ? "no reading" : `${format(d.value)} ${unit}`}`}</title>
-          </rect>
-        ))}
+        {/* The day being pointed at */}
+        {active != null && (
+          <g className="chart-cursor">
+            <line x1={x(active)} x2={x(active)} y1={M.top} y2={M.top + plotH} />
+            {kind === "line" && point?.value != null && <circle cx={x(active)} cy={y(point.value)} r={4} />}
+          </g>
+        )}
       </svg>
     );
   }
 
   return (
-    <div ref={ref} className="chart" style={{ height: HEIGHT }}>
-      {body ?? (values.length === 0 ? <p className="empty">No readings in this period</p> : null)}
-    </div>
+    <>
+      <div ref={ref} className="chart" style={{ height: HEIGHT }}>
+        {tip}
+        {body ?? (values.length === 0 ? <p className="empty">No readings in this period</p> : null)}
+      </div>
+      {flagLabel && flag && values.some(flag) && <p className="chart-key"><i />{flagLabel}</p>}
+    </>
   );
 }

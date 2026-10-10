@@ -10,7 +10,6 @@ const RHR_AMBER_BPM = 3;
 const RHR_RED_BPM = 5;
 const HRV_AMBER_RATIO = 0.9;
 const HRV_RED_RATIO = 0.8;
-const STEPS_AMBER_RATIO = 0.8;
 
 const RANK: Record<Tone, number> = { ok: 0, amber: 1, red: 2 };
 
@@ -50,18 +49,7 @@ export function hrvTone(ms: number, normal: number | null): Tone {
   return ratio <= HRV_RED_RATIO ? "red" : ratio <= HRV_AMBER_RATIO ? "amber" : "ok";
 }
 
-export function stepsTone(steps: number | null, normal: number | null): Tone {
-  return steps != null && normal != null && steps < normal * STEPS_AMBER_RATIO ? "amber" : "ok";
-}
-
 const TONE_LABEL: Record<Tone, string> = { ok: "On track", amber: "Below your normal", red: "Needs attention" };
-
-/** Where a value sits against the user's normal, as 0-100 along a bar whose middle is "normal". */
-export function rangePosition(value: number, normal: number) {
-  const SPAN = 0.3; // the bar covers normal ±30%
-  const deviation = (value - normal) / normal;
-  return 50 + (Math.max(-SPAN, Math.min(SPAN, deviation)) / SPAN) * 50;
-}
 
 /** Today's read at the top of the coach view: only what is off, worst first. */
 export function buildStatus(sleep: Sleep | null, metrics: Metrics | null) {

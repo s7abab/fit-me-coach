@@ -81,6 +81,20 @@ a { color: inherit; text-decoration-color: var(--faint); text-underline-offset: 
 .wordmark { font-size: 17px; font-weight: 650; letter-spacing: -0.02em; }
 .wordmark i { display: inline-block; width: 6px; height: 6px; margin-left: 3px; border-radius: 50%; background: var(--accent); }
 .top-date { color: var(--faint); font-size: 13px; }
+.top-end { display: flex; align-items: center; gap: 16px; }
+.signout { font-size: 13px; color: var(--dim); }
+.signout:hover { color: var(--text); }
+
+.button { margin-top: 20px; padding: 10px 20px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.button:hover { filter: brightness(1.08); }
+
+/* ---------- Sign in ---------- */
+
+.signin { display: flex; flex-direction: column; justify-content: center; max-width: 520px; min-height: 100dvh; margin: 0 auto; padding: var(--pad); }
+.signin h1 { margin-top: 28px; font-size: clamp(28px, 5vw, 38px); font-weight: 600; line-height: 1.12; letter-spacing: -0.025em; text-wrap: balance; }
+.signin p { margin-top: 14px; color: var(--dim); }
+.signin .answer-error { color: var(--amber); }
+.signin .fine { margin-top: 36px; text-align: left; color: var(--faint); }
 .tabs { display: none; }
 
 .tabs, .segmented { background: var(--surface); border-radius: 999px; padding: 3px; }
@@ -108,11 +122,28 @@ a { color: inherit; text-decoration-color: var(--faint); text-underline-offset: 
 .tile-sub b { font-weight: 500; }
 .tile-sub .tone-ok { color: var(--dim); }
 
-/* Reading against normal: the middle tick is the user's normal */
-.range { position: relative; height: 4px; margin-top: 12px; border-radius: 2px; background: var(--surface-2); }
-.range::before { content: ""; position: absolute; left: 50%; top: -3px; width: 1px; height: 10px; background: var(--faint); }
-.range-fill { position: absolute; top: 0; height: 100%; background: currentColor; opacity: 0.45; }
-.range-dot { position: absolute; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 2px var(--surface); }
+.tiles-note { margin-top: 10px; font-size: 12px; color: var(--faint); }
+
+/* Each tile has one small picture, all the same height so the tiles line up */
+.meter, .bars, .stages { height: 22px; margin-top: 10px; }
+
+/* Progress towards 100 (readiness) or a goal (weekly cardio) */
+.meter { position: relative; }
+.meter::before, .meter span { content: ""; position: absolute; left: 0; bottom: 4px; height: 6px; border-radius: 3px; }
+.meter::before { width: 100%; background: var(--surface-2); }
+.meter span { background: currentColor; }
+
+/* One bar per day */
+.bars { display: flex; align-items: flex-end; gap: 4px; }
+.bars span { flex: 1; min-width: 0; border-radius: 2px; background: var(--faint); opacity: 0.45; }
+.bars span.is-today { background: var(--accent); opacity: 1; }
+
+/* Last night, split by sleep stage: darker = deeper */
+.stages { display: flex; align-items: flex-end; gap: 2px; }
+.stages span { height: 14px; min-width: 2px; border-radius: 2px; background: var(--accent); }
+.stages .stage-rem { opacity: 0.6; }
+.stages .stage-light { opacity: 0.3; }
+.stages .stage-awake { background: var(--faint); opacity: 0.5; }
 
 .starters { display: flex; flex-wrap: wrap; gap: 8px; padding: 20px 0 32px; }
 .starters button { padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--dim); text-align: left; }
@@ -169,19 +200,34 @@ a { color: inherit; text-decoration-color: var(--faint); text-underline-offset: 
 .card { background: var(--surface); border-radius: 16px; padding: 16px 18px; min-width: 0; }
 .card header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .card h2 { font-size: 14px; font-weight: 600; }
+.card h2 small { display: block; margin-top: 1px; font-size: 12px; font-weight: 400; color: var(--faint); }
+
+/* The takeaway above each chart */
+.summary { margin-top: 12px; }
+.summary-value { font-size: 26px; font-weight: 600; line-height: 1.15; letter-spacing: -0.03em; }
+.summary-value span { margin-left: 3px; font-size: 13px; font-weight: 500; letter-spacing: 0; color: var(--faint); }
+.summary-value small { margin-left: 8px; font-size: 13px; font-weight: 400; letter-spacing: 0; color: var(--dim); }
+.summary-delta { margin-top: 2px; font-size: 13px; color: var(--dim); }
+.summary-delta b { font-weight: 600; }
+.summary-delta .tone-ok { color: var(--text); }
 .card header span { font-size: 13px; color: var(--faint); }
 
-.chart { margin-top: 10px; }
-.chart svg { display: block; }
+.chart { position: relative; margin-top: 4px; }
+.chart svg { display: block; touch-action: pan-y; cursor: crosshair; }
+.chart-tip { position: absolute; top: 0; transform: translateX(-50%); padding: 1px 8px; border-radius: 999px; background: var(--surface-2); font-size: 12px; color: var(--dim); white-space: nowrap; pointer-events: none; }
+.chart-tip b { font-weight: 600; color: var(--text); }
+.chart-cursor line { stroke: var(--faint); stroke-width: 1; }
+.chart-cursor circle { fill: var(--text); stroke: var(--surface); stroke-width: 2; }
+.chart-key { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 12px; color: var(--faint); }
+.chart-key i { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); }
 .chart-grid { stroke: var(--line); stroke-width: 1; }
 .chart-dash { stroke: var(--faint); stroke-width: 1; stroke-dasharray: 2 4; }
 .chart-line { fill: none; stroke: var(--text); stroke-width: 1.75; stroke-linejoin: round; stroke-linecap: round; }
-.chart-bar { stroke: var(--dim); stroke-width: 4; stroke-linecap: round; }
+.chart-bar { stroke: var(--dim); stroke-width: 6; stroke-linecap: round; }
 .chart-dot { fill: var(--text); }
 .chart-bar.is-amber { stroke: var(--amber); }
 .chart-dot.is-amber { fill: var(--amber); }
 .chart-tick, .chart-ref { fill: var(--faint); font-size: 11px; }
-.chart-end { fill: var(--text); font-size: 12.5px; font-weight: 600; }
 
 .empty { padding: 16px 0 4px; color: var(--faint); font-size: 13px; }
 

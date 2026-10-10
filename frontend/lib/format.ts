@@ -26,6 +26,12 @@ export function thousands(value: number | null | undefined) {
   return value == null ? "–" : Math.round(value).toLocaleString("en-US");
 }
 
+/** 432 minutes -> ["7", "12"] */
+export function hoursMinutes(minutes: number) {
+  const whole = Math.round(minutes);
+  return [String(Math.floor(whole / 60)), String(whole % 60).padStart(2, "0")];
+}
+
 /** Signed difference with a real minus sign: "+6", "−0.4" */
 export function signed(value: number, digits = 0) {
   const text = Math.abs(value).toFixed(digits);
