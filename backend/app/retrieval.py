@@ -1,6 +1,6 @@
 from functools import lru_cache
 from sentence_transformers import CrossEncoder
-from app.embeddings import embed, load_model
+from app.embeddings import embed
 
 # Columns we want for every chunk: id, text, page, document title, document link
 COLUMNS = "c.id, c.content, c.page, d.title, d.source_url"
@@ -9,7 +9,7 @@ FROM = "FROM chunks c JOIN documents d ON d.id = c.document_id"
 
 @lru_cache
 def get_reranker():
-    return load_model(CrossEncoder, "cross-encoder/ms-marco-MiniLM-L-6-v2")
+    return CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
 
 
 def _vector_search(conn, q_vec, n):

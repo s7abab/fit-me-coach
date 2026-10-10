@@ -9,5 +9,8 @@ class Settings(BaseSettings):
     llm_api_key: str
     llm_base_url: str
     llm_model: str = "openai.gpt-oss-120b"
+    demo_user_id: int = 1
+    warmup_models: bool = True
+    cors_origins: list[str] = ["http://localhost:3000"]
 
 settings = Settings()
