@@ -39,6 +39,9 @@ WORKOUT_TYPES = {
     "swim": {"SWIMMING", "SWIMMING_POOL", "SWIMMING_OPEN_WATER"},
     "hiit": {"HIIT", "INTERVAL_WORKOUT", "TABATA_WORKOUT", "CIRCUIT_TRAINING", "BOOTCAMP"},
 }
+# How much a minute in each heart rate zone counts towards the weekly cardio goal
+ZONE_WEIGHT = {"MODERATE": 1, "VIGOROUS": 2, "PEAK": 2}
+
 WORKOUT_TYPE = {google: ours for ours, names in WORKOUT_TYPES.items() for google in names}
 
 
@@ -127,12 +130,12 @@ def metric_rows(steps=(), zone_minutes=(), resting_hr=(), hrv=()):
         put(rollup_day(r), "steps", count if count is not None and count >= 0 else None)
 
     for r in zone_minutes:
-        zones = r.get("activeZoneMinutes")
+        zones = (r.get("timeInHeartRateZone") or {}).get("timeInHeartRateZones")
         if zones is not None:
-            # Google already counts the harder zones double, so the three sums simply add up
-            put(rollup_day(r), "zone_minutes", sum(
-                _int(zones.get(key)) or 0
-                for key in ("sumInFatBurnHeartZone", "sumInCardioHeartZone", "sumInPeakHeartZone")))
+            # Cardio minutes, counted the way the Google Health app's weekly cardio does:
+            # a minute in the moderate zone counts once, a minute in a harder zone counts double
+            seconds = sum((_seconds(z.get("duration")) or 0) * ZONE_WEIGHT.get(z.get("heartRateZone"), 0) for z in zones)
+            put(rollup_day(r), "zone_minutes", round(seconds / 60))
 
     for p in resting_hr:
         data = p.get("dailyRestingHeartRate") or {}
@@ -291,7 +294,7 @@ def _pull(conn, client, user_id, scopes, days):
         steps += [
             ("steps", lambda: metrics.update(steps=client.daily_rollup("steps", first_day, end))),
             ("zone minutes", lambda: metrics.update(
-                zone_minutes=client.daily_rollup("active-zone-minutes", first_day, end))),
+                zone_minutes=client.daily_rollup("time-in-heart-rate-zone", first_day, end))),
             ("workouts", lambda: save_workouts(conn, user_id, workout_rows(client.list_points(
                 "exercise", f'exercise.interval.civil_start_time >= "{since}"', page_size=25)))),
         ]

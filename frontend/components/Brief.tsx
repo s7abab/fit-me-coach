@@ -1,8 +1,7 @@
 import { signInWithGoogle } from "@/app/actions";
 import { ok, type Connection, type Dashboard } from "@/lib/api";
 import { buildStatus } from "@/lib/status";
-import Overview from "./Overview";
-import { Drivers, ReadinessRing } from "./Readiness";
+import Scores from "./Scores";
 
 const CONNECT: Partial<Record<Connection["status"], { headline: string; detail: string }>> = {
   none: {
@@ -50,33 +49,16 @@ export default function Brief({ data, error }: { data: Dashboard | null; error: 
   if (connection !== "ready") return <Connect status={connection} />;
 
   const status = buildStatus(ok(data.sleep), ok(data.metrics));
-  const { readiness } = data.overview;
 
   return (
     <section className="brief">
-      <div className="hero">
-        <ReadinessRing readiness={readiness} />
-        <div className="hero-head">
-          <div className={`brief-label tone-${status.tone}`}><i />{status.label}</div>
-          <h1>{status.headline}</h1>
-        </div>
-        <div className="hero-more">
-          {readiness ? (
-            <Drivers signals={readiness.signals} />
-          ) : (
-            <p className="brief-detail">
-              {status.detail || "Readiness appears once there is about a week of sleep and heart data."}
-            </p>
-          )}
-        </div>
-      </div>
-      <Overview overview={data.overview} />
-      {readiness && (
-        <p className="tiles-note">
-          Readiness is Fit Me Coach&apos;s own estimate, comparing today with your normal. It is not Google&apos;s
-          readiness score.
-        </p>
-      )}
+      <div className={`brief-label tone-${status.tone}`}><i />{status.label}</div>
+      <h1>{status.headline}</h1>
+      <Scores overview={data.overview} />
+      <p className="tiles-note">
+        Cardio load, Sleep and Steps show what your device measured, as Google Health reports it. Readiness is Fit
+        Me Coach&apos;s own estimate and will not match Google Health&apos;s score.
+      </p>
     </section>
   );
 }

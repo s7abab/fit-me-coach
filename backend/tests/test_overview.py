@@ -29,3 +29,4 @@ def test_missing_signal_is_left_out_not_counted_as_zero():
 def test_one_signal_is_not_enough():
     assert readiness_score(hrv=55, hrv_normal=55) is None
     assert readiness_score(hrv=55, resting_hr=60, sleep_hours=7) is None     # no normal to compare with yet
+

@@ -66,13 +66,11 @@ export default function App() {
       />
 
       {/* Phones only: the way into the coach */}
-      <button type="button" className="ask-bar" onClick={() => setCoachOpen(true)}>
-        Ask your coach
-        <span aria-hidden="true">
-          <svg viewBox="0 0 16 16" width="16" height="16">
-            <path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </span>
+      <button type="button" className="ask-ai" onClick={() => setCoachOpen(true)}>
+        <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+          <path d="M10 2.5l1.7 4.3a2 2 0 0 0 1.1 1.1L17.5 10l-4.7 2.1a2 2 0 0 0-1.1 1.1L10 17.5l-1.7-4.3a2 2 0 0 0-1.1-1.1L2.5 10l4.7-2.1a2 2 0 0 0 1.1-1.1L10 2.5z" fill="currentColor" />
+        </svg>
+        Ask AI
       </button>
     </div>
   );

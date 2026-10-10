@@ -48,8 +48,10 @@ def test_daily_metrics_are_merged_by_date():
     rows = metric_rows(
         steps=[{"civilStartTime": {"date": day(8)}, "steps": {"countSum": "9120"}},
                {"civilStartTime": {"date": day(9)}, "steps": {"countSum": "4310"}}],
-        zone_minutes=[{"civilStartTime": {"date": day(9)}, "activeZoneMinutes": {
-            "sumInFatBurnHeartZone": "18", "sumInCardioHeartZone": "12", "sumInPeakHeartZone": "4"}}],
+        # 24 h mostly resting, 10 min moderate, 12 min vigorous (counts double) = 34 cardio minutes
+        zone_minutes=[{"civilStartTime": {"date": day(9)}, "timeInHeartRateZone": {"timeInHeartRateZones": [
+            {"heartRateZone": "LIGHT", "duration": "80000s"}, {"heartRateZone": "MODERATE", "duration": "600s"},
+            {"heartRateZone": "VIGOROUS", "duration": "720s"}]}}],
         resting_hr=[{"dailyRestingHeartRate": {"date": day(9), "beatsPerMinute": "61"}}],
         hrv=[{"dailyHeartRateVariability": {"date": day(9), "averageHeartRateVariabilityMilliseconds": 48.26}}],
     )

@@ -5,6 +5,7 @@ export type Tone = "ok" | "amber" | "red";
 
 // Thresholds for "below normal" (amber) and "alert" (red). Display only, not medical advice.
 export const SHORT_NIGHT_HOURS = 6;
+export const SLEEP_GOAL_HOURS = 8; // what the sleep ring fills towards
 const SLEEP_BELOW_NORMAL_HOURS = 0.5;
 const RHR_AMBER_BPM = 3;
 const RHR_RED_BPM = 5;
@@ -51,13 +52,6 @@ export function hrvTone(ms: number, normal: number | null): Tone {
 
 const TONE_LABEL: Record<Tone, string> = { ok: "On track", amber: "Below your normal", red: "Needs attention" };
 
-/** Where a value sits against the user's normal, as 0-100 along a bar whose middle is "normal". */
-export function rangePosition(value: number, normal: number) {
-  const SPAN = 0.3; // the bar covers normal ±30%
-  const deviation = (value - normal) / normal;
-  return 50 + (Math.max(-SPAN, Math.min(SPAN, deviation)) / SPAN) * 50;
-}
-
 const DEFAULT_STARTERS = [
   "How am I doing this week?",
   "Am I ready to train hard today?",
@@ -70,7 +64,7 @@ export function buildStarters(overview: Overview | null) {
   const starters: string[] = [];
   const { readiness, sleep, cardio } = overview;
   if (readiness && readiness.level !== "high") starters.push(`Why is my readiness ${readiness.level} today?`);
-  if (sleep && sleep.minutes / 60 < SHORT_NIGHT_HOURS) starters.push("How can I get my sleep back on track?");
+  if (sleep && sleep.minutes < SLEEP_GOAL_HOURS * 60) starters.push("How can I sleep better?");
   if (readiness?.level === "high") starters.push("What kind of training suits today?");
   if (cardio && cardio.week_minutes < cardio.target_minutes) starters.push("How can I reach my weekly cardio goal?");
   return [...starters, ...DEFAULT_STARTERS].slice(0, 3);

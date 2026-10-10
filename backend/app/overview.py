@@ -1,4 +1,8 @@
-"""Today at a glance, in the style of Google Health: readiness, weekly cardio, steps and sleep."""
+"""Today at a glance, organised like Google Health: readiness, cardio load and sleep, plus steps.
+Only readiness is a score of ours; cardio load and sleep show what the watch measured.
+
+The scores are our own estimates. Google's API shares the raw readings, not its own scores, so these
+will not match the numbers in Google Health, Whoop or Bevel."""
 from datetime import datetime, timedelta
 
 from psycopg.rows import dict_row
@@ -6,7 +10,8 @@ from psycopg.rows import dict_row
 from app.tools import TZ
 
 BASELINE_DAYS = 30          # "your normal" = your average over the month before
-MIN_BASELINE_DAYS = 5       # with less history than this, there is no normal to compare with
+MIN_BASELINE_DAYS = 3       # with less history than this, there is no normal to compare with
+CALIBRATION_DAYS = 7        # readiness stays hidden until the watch has this many days of heart data
 WEEKLY_ZONE_MINUTES = 150   # WHO: at least 150 minutes of moderate activity a week
 
 # How much each signal counts towards readiness
@@ -17,10 +22,13 @@ def _clamp(value):
     return max(0, min(100, value))
 
 
+def _level(score):
+    return "high" if score >= 70 else "moderate" if score >= 40 else "low"
+
+
 def readiness_score(hrv=None, hrv_normal=None, resting_hr=None, resting_hr_normal=None,
                     sleep_hours=None, sleep_normal=None):
-    """Our own 0-100 estimate of how recovered the user is. NOT Google's readiness score (their API
-    does not share it). Each signal scores 75 when it matches the user's normal, more when it is
+    """0-100: how ready the body is today. Each signal scores 75 when it matches the user's normal, more when it is
     better and less when it is worse. Returns None unless at least two signals are available.
     `signals` lists what the score was built from, so the app can show why it is high or low."""
     signals = []
@@ -39,11 +47,7 @@ def readiness_score(hrv=None, hrv_normal=None, resting_hr=None, resting_hr_norma
     score = round(sum(s["score"] * WEIGHTS[s["key"]] for s in signals) / sum(WEIGHTS[s["key"]] for s in signals))
     for s in signals:
         s["score"] = round(s["score"])
-    return {
-        "score": score,
-        "level": "high" if score >= 70 else "moderate" if score >= 40 else "low",
-        "signals": signals,
-    }
+    return {"score": score, "level": _level(score), "signals": signals}
 
 
 def _latest_and_normal(rows, key, today):
@@ -73,10 +77,9 @@ def get_overview(conn, user_id):
     step_days = [{"date": d.isoformat(), "steps": by_date.get(d, {}).get("steps")} for d in last_7]
     counted = [d["steps"] for d in step_days if d["steps"] is not None]
 
-    # ----- Weekly cardio: zone minutes since Monday -----
-    monday = today - timedelta(days=today.weekday())
-    week = [monday + timedelta(days=i) for i in range(7)]
-    cardio_days = [{"date": d.isoformat(), "minutes": by_date.get(d, {}).get("zone_minutes")} for d in week]
+    # ----- Cardio load: cardio minutes over the last 7 days, today included. A rolling week (rather than
+    # Monday to Sunday) is what lines up with the figure the Google Health app shows. -----
+    cardio_days = [{"date": d.isoformat(), "minutes": by_date.get(d, {}).get("zone_minutes")} for d in last_7]
     has_cardio = any(d["zone_minutes"] is not None for d in days)
 
     # ----- Sleep: the most recent night -----
@@ -89,12 +92,18 @@ def get_overview(conn, user_id):
     resting_hr, resting_hr_normal = _latest_and_normal(days, "resting_hr", today)
     recent_night = night if night and night["date"] >= today - timedelta(days=1) else None
 
+    # A normal built from a handful of days swings too much to trust, so the score waits ("calibrating")
+    heart_days = sum(1 for d in days if d["resting_hr"] is not None or d["hrv_ms"] is not None)
+    calibrated = heart_days >= CALIBRATION_DAYS
+
     return {
         "readiness": readiness_score(
             hrv, hrv_normal, resting_hr, resting_hr_normal,
-            recent_night["total_minutes"] / 60 if recent_night else None, sleep_normal),
+            recent_night["total_minutes"] / 60 if recent_night else None, sleep_normal) if calibrated else None,
+        "calibration": None if calibrated else {"days": heart_days, "needed": CALIBRATION_DAYS},
         "cardio": {
             "week_minutes": sum(d["minutes"] or 0 for d in cardio_days),
+            "today_minutes": by_date.get(today, {}).get("zone_minutes"),
             "target_minutes": WEEKLY_ZONE_MINUTES,
             "days": cardio_days,
         } if has_cardio else None,

@@ -72,17 +72,18 @@ export type Connection = {
   last_synced_at: string | null;
 };
 
-export type Readiness = {
-  score: number; // 0-100, our own estimate
+// Readiness: our own 0-100 estimate, with what it was built from
+export type Score = {
+  score: number;
   level: "low" | "moderate" | "high";
-  signals: Signal[]; // what the score was built from
+  signals: Signal[];
 };
 
 export type Signal = {
   key: "sleep" | "resting_hr" | "hrv";
   value: number;
   normal: number; // the user's own average over the month before
-  score: number; // 0-100, where 75 means "same as normal"
+  score: number; // 0-100 for this signal alone
 };
 
 export type LastNight = {
@@ -99,8 +100,9 @@ export type LastNight = {
 
 // Today at a glance. Each part is null until there is data for it.
 export type Overview = {
-  readiness: Readiness | null;
-  cardio: { week_minutes: number; target_minutes: number; days: { date: string; minutes: number | null }[] } | null;
+  readiness: Score | null;
+  calibration: { days: number; needed: number } | null; // set while readiness is still learning the user's normal
+  cardio: { week_minutes: number; today_minutes: number | null; target_minutes: number; days: { date: string; minutes: number | null }[] } | null;
   steps: { today: number | null; avg_7d: number | null; days: { date: string; steps: number | null }[] } | null;
   sleep: LastNight | null;
 };
