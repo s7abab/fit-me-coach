@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.agent import run_agent
 from app.config import settings
 from app.db import get_conn
+
 from app.schema import AskRequest, AskResponse
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -59,3 +60,15 @@ def ask(req: AskRequest):
     # Never log the question: it's private health information
     logger.info("ask safety=%s tools=%d latency_ms=%d", result["safety"], len(result["tool_calls"]), latency_ms)
     return AskResponse(**result, latency_ms=latency_ms)
+
+@app.get("/dashboard")
+def dashboard(days: int = Query(14, ge=1, le=30)):
+    user_id = settings.demo_user_id
+    args = {"days": days}
+    with get_conn() as conn:
+        return {
+            "profile": get_user_profile(conn, user_id, {}),
+            "sleep": get_sleep(conn, user_id, args),
+            "metrics": get_daily_metrics(conn, user_id, args),
+            "workouts": get_workouts(conn, user_id, args),
+        }

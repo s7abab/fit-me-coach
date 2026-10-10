@@ -44,3 +44,6 @@ def test_agent_failure_returns_503(monkeypatch):
     r = client.post("/ask", json={"question": "How did I sleep?"})
     assert r.status_code == 503
     assert "try again" in r.json()["detail"]
+
+def test_dashboard_rejects_bad_days():
+    assert client.get("/dashboard?days=99").status_code == 422
