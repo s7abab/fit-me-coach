@@ -158,6 +158,17 @@ def get_workouts(conn, user_id, args):
         } for r in rows],
     }
 
+def get_recovery_summary(conn, user_id, args):
+    """Sleep + heart data together: the two things that explain tiredness and recovery."""
+    days = _days(args, 7)
+    sleep = get_sleep(conn, user_id, {"days": days})
+    body = get_daily_metrics(conn, user_id, {"days": days})
+    # Keep only the last 3 days of detail, to keep the output small
+    if "nights" in sleep:
+        sleep["last_3_nights"] = sleep.pop("nights")[-3:]
+    if "days" in body:
+        body["last_3_days"] = body.pop("days")[-3:]
+    return {"sleep": sleep, "heart_and_activity": body}
 
 def search_guides(conn, user_id, args):
     query = str(args.get("query", "")).strip()
@@ -165,6 +176,7 @@ def search_guides(conn, user_id, args):
         return {"error": "query is required"}
     chunks = search(conn, query, k=4)
     return {"results": [{
+        "source_id": f"S{c['id']}",          # the only valid way to cite this chunk
         "title": c["title"], "page": c["page"], "url": c["url"], "text": c["content"][:900],
     } for c in chunks]}
 
@@ -192,6 +204,14 @@ TOOLS = {
         "parameters": {"type": "object", "properties": {
             "days": {"type": "integer", "minimum": 1, "maximum": 30, "description": "Number of days (default 7)."}}},
     },
+    "get_recovery_summary": {
+        "fn": get_recovery_summary,
+        "description": ("Use FIRST for any question about tiredness, energy, recovery or readiness to train. "
+                        "Returns sleep (hours, bedtime, nights under 6h) AND resting heart rate + HRV for the "
+                        "last N days, each compared with the user's normal baseline."),
+        "parameters": {"type": "object", "properties": {
+            "days": {"type": "integer", "minimum": 1, "maximum": 30, "description": "Number of days (default 7)."}}},
+    },
     "get_workouts": {
         "fn": get_workouts,
         "description": "Get the user's workouts for the last N days: name, type, duration and average heart rate.",
@@ -201,7 +221,8 @@ TOOLS = {
     "search_guides": {
         "fn": search_guides,
         "description": ("Search trusted health guidelines (WHO, US Physical Activity Guidelines, ICMR-NIN diet, "
-                        "NHLBI sleep) for general facts and recommendations. Use for any general health question."),
+                    "NHLBI sleep). Use before giving ANY health fact or advice. "
+                    "Each result has a source_id to cite, like [S123]."),
         "parameters": {"type": "object", "properties": {
             "query": {"type": "string", "description": "What to search for, as a clear question."}},
             "required": ["query"]},

@@ -49,6 +49,6 @@ def search(conn, question, k=5, candidates=20):
     best = sorted(zip(shortlist, rerank_scores), key=lambda x: x[1], reverse=True)[:k]
 
     return [
-        {"content": rows[i][1], "page": rows[i][2], "title": rows[i][3], "url": rows[i][4], "score": float(s)}
+        {"id": i, "content": rows[i][1], "page": rows[i][2], "title": rows[i][3], "url": rows[i][4], "score": float(s)}
         for i, s in best
     ]
