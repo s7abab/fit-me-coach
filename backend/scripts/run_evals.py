@@ -47,9 +47,12 @@ def run_case(case):
     if "expect_doc" in case:
         checks["retrieval"] = any(case["expect_doc"].lower() in s["title"].lower() for s in result["sources"])
 
-    # Code check 3: knowledge answers must cite sources like [1]
+    # Code check 3: knowledge answers must cite a source returned for this answer.
     if case["category"] == "knowledge":
-        checks["citation"] = bool(re.search(r"\[\d+\]", result["answer"]))
+        cited = {int(n) for n in re.findall(r"\[(\d+)\]", result["answer"])}
+        checks["citation"] = bool(cited) and cited <= {
+            source["n"] for source in result["sources"]
+        }
 
     # AI judge: is the answer actually right?
     if "rubric" in case:
