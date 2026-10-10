@@ -56,6 +56,12 @@ def run_case(case):
 
 
 def main():
+
+    # Every eval run starts with a clean memory, so results are comparable
+    from app.db import get_conn
+    with get_conn() as conn:
+        conn.execute("DELETE FROM user_memories WHERE user_id = %s", (USER_ID,))
+
     repeat = int(sys.argv[1]) if len(sys.argv) > 1 else 1   # agents vary run to run: try 3
     cases = json.loads((EVAL_DIR / "agent_cases.json").read_text())
     all_runs, failed_checks = [], Counter()
