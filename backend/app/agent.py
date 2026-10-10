@@ -1,6 +1,5 @@
 import json
 import re
-import time
 from datetime import datetime
 
 from app.db import get_conn
@@ -8,7 +7,7 @@ from app.llm import complete
 from app.safety import check_red_flags
 from app.tools import TZ, run_tool, tool_schemas
 
-MAX_STEPS = 6   # safety limit: the AI can call tools at most this many rounds
+MAX_STEPS = 10   # safety limit: the AI can call tools at most this many rounds
 
 SYSTEM_PROMPT = """You are Fit Me Coach, a friendly personal fitness, sleep and nutrition coach.
 Today is {today}.
@@ -30,69 +29,50 @@ How to work:
 7. Format: a 1-2 sentence summary of what the user's data shows (no citation needed),
    then up to 3 bullet points of advice. Every advice bullet must end with a citation like [S123]."""
 
-CITATION = re.compile(r"\[S(\d+)\]")
+FIX_PROMPT = ("Some advice has no citation, or cites a source_id that search_guides did not return. "
+              "Every advice bullet must end with a citation like [S123] from your search_guides results. "
+              "Search for support, or remove the unsupported points.")
+
+CITATION = re.compile(r"\[(S\d+)\]")
 
 
 def _clean(text):
-    # Remove model-specific marks like 【3†L1-L4】 and bare [2] the model invents (valid ones are [S123])
-    text = re.sub(r"\s*【[^】]*】", "", text or "")
+    # The model sometimes writes citations as 【S123】: turn those into [S123].
+    # Then remove marks it invents, like 【3†L1-L4】 and bare [2] (valid ones are [S123])
+    text = re.sub(r"【(S\d+)[^】]*】", r"[\1]", text or "")
+    text = re.sub(r"\s*【[^】]*】", "", text)
     return re.sub(r"\s*\[\d+\]", "", text).strip()
 
 
-def _grounding_problems(answer, retrieved):
-    """Find citations that were never retrieved, and advice bullets with no citation."""
-    problems = []
-    fake = sorted({f"S{n}" for n in CITATION.findall(answer)} - retrieved.keys())
-    if fake:
-        problems.append(f"You cited {', '.join(fake)}, which did not come from search_guides.")
-    uncited = [line.strip() for line in answer.splitlines()
-               if line.strip().startswith(("-", "*", "•")) and not CITATION.search(line)]
-    if uncited:
-        problems.append("These advice points have no citation: " + " | ".join(u[:80] for u in uncited[:3]))
-    return problems
-
-
-def _assistant_message(msg):
-    """Turn the model's reply into a dict we can send back in the next request."""
-    out = {"role": "assistant", "content": msg.content or ""}
-    if msg.tool_calls:
-        out["tool_calls"] = [{
-            "id": tc.id,
-            "type": "function",
-            "function": {"name": tc.function.name, "arguments": tc.function.arguments},
-        } for tc in msg.tool_calls]
-    return out
-
-
-def _collect_sources(result_json, retrieved):
-    """Remember every guideline chunk search_guides returned, by source_id."""
-    try:
-        for r in json.loads(result_json).get("results", []):
-            retrieved[r["source_id"]] = {"title": r["title"], "page": r["page"], "url": r["url"]}
-    except (json.JSONDecodeError, KeyError, AttributeError):
-        pass
+def _unsupported(answer, retrieved):
+    """True if the answer cites a source we never retrieved, or has an advice bullet with no citation."""
+    bullets = [line for line in answer.splitlines() if line.strip().startswith(("-", "*", "•"))]
+    return (not set(CITATION.findall(answer)) <= retrieved.keys()
+            or any(not CITATION.search(b) for b in bullets))
 
 
 def _finalize(answer, retrieved):
-    """Swap [S123] ids for numbered citations [1], [2] and build the source list."""
+    """Swap [S123] ids for numbered citations [1], [2] and build the source list.
+    Ids that search_guides never returned are dropped."""
     numbering, sources = {}, []
 
     def renumber(match):
-        sid = f"S{match.group(1)}"
+        sid = match.group(1)
+        if sid not in retrieved:
+            return ""
         if sid not in numbering:
             numbering[sid] = len(numbering) + 1
             sources.append({"n": numbering[sid], **retrieved[sid]})
-        return f"[{numbering[sid]}]"
+        return match.group(0).replace(sid, str(numbering[sid]))
 
-    return CITATION.sub(renumber, answer), sources
+    return re.sub(r"\s*" + CITATION.pattern, renumber, answer), sources
 
 
-def run_agent(question, user_id, verbose=False):
+def run_agent(question, user_id):
     # 1. Safety first: emergencies never reach the AI
     red_flag = check_red_flags(question)
     if red_flag:
-        return {"answer": red_flag, "sources": [], "safety": "red_flag", "tool_calls": [], "steps": 0,
-                "grounded": True, "grounding_issues": []}
+        return {"answer": red_flag, "sources": [], "safety": "red_flag", "tool_calls": []}
 
     today = datetime.now(TZ).strftime("%A, %d %B %Y")
     messages = [
@@ -100,33 +80,24 @@ def run_agent(question, user_id, verbose=False):
         {"role": "user", "content": question},
     ]
     trace, retrieved = [], {}
-    guard_used = False   # we ask the AI to fix unsupported claims at most once
+    retried = False   # we ask the AI to fix unsupported advice at most once
 
     with get_conn() as conn:
-        for step in range(1, MAX_STEPS + 1):
+        for _ in range(MAX_STEPS):
             # 2. Ask the AI: answer now, or call tools?
             msg = complete(messages, tools=tool_schemas())
-            messages.append(_assistant_message(msg))
 
-            # 3. No tool calls: the AI wants to answer. Check its grounding first.
+            messages.append(msg)
+
+            # 3. No tool calls: the AI wants to answer. Send it back ONCE if the advice is not supported.
             if not msg.tool_calls:
                 answer = _clean(msg.content)
-                problems = _grounding_problems(answer, retrieved)
-                if problems and not guard_used and step < MAX_STEPS:
-                    guard_used = True
-                    # Grounding guard: send the AI back ONCE to fix unsupported claims
-                    if verbose:
-                        print(f"  [step {step}] guard: {problems}")
-                    messages.append({"role": "user", "content": (
-                        " ".join(problems) + " Every piece of advice must be supported by search_guides "
-                        "and cited like [S123]. Search for support, or remove the unsupported points.")})
+                if not retried and _unsupported(answer, retrieved):
+                    retried = True
+                    messages.append({"role": "user", "content": FIX_PROMPT})
                     continue
-                # Still invented after the fix attempt? Drop those citation marks.
-                answer = re.sub(r"\s*\[S(\d+)\]", lambda m: m.group(0) if f"S{m.group(1)}" in retrieved else "", answer)
-                remaining = _grounding_problems(answer, retrieved)
                 answer, sources = _finalize(answer, retrieved)
-                return {"answer": answer, "sources": sources, "safety": "ok", "tool_calls": trace,
-                        "steps": step, "grounded": not remaining, "grounding_issues": remaining}
+                return {"answer": answer, "sources": sources, "safety": "ok", "tool_calls": trace}
 
             # 4. Run every tool the AI asked for, and give it the results
             for tc in msg.tool_calls:
@@ -134,22 +105,15 @@ def run_agent(question, user_id, verbose=False):
                     args = json.loads(tc.function.arguments or "{}")
                 except json.JSONDecodeError:
                     args = {}
-                start = time.perf_counter()
                 result = run_tool(conn, user_id, tc.function.name, args)
-                ms = int((time.perf_counter() - start) * 1000)
-
-                if tc.function.name == "search_guides":
-                    _collect_sources(result, retrieved)
-
-                trace.append({"step": step, "tool": tc.function.name, "args": args, "ms": ms})
-                if verbose:
-                    print(f"  [step {step}] {tc.function.name}({args}) -> {len(result)} chars, {ms} ms")
-
+                trace.append({"tool": tc.function.name, "args": args})
                 messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
 
+                # Remember every guideline chunk search_guides returned, so citations can be checked
+                if tc.function.name == "search_guides":
+                    for r in json.loads(result).get("results", []):
+                        retrieved[r["source_id"]] = {"title": r["title"], "page": r["page"], "url": r["url"]}
+
     # 5. Too many steps: stop safely instead of looping forever
-    return {
-        "answer": "Sorry, I couldn't finish that. Could you ask in a simpler way?",
-        "sources": [], "safety": "ok", "tool_calls": trace, "steps": MAX_STEPS,
-        "grounded": False, "grounding_issues": ["step limit reached"],
-    }
+    return {"answer": "Sorry, I couldn't finish that. Could you ask in a simpler way?",
+            "sources": [], "safety": "ok", "tool_calls": trace}
