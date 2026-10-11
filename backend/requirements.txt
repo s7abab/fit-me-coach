@@ -9,4 +9,5 @@ pymupdf4llm
 httpx
 pyjwt
 cryptography
+mcp>=2.3,<3
 pytest

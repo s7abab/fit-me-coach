@@ -1,4 +1,5 @@
 from pathlib import Path
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
@@ -18,6 +19,10 @@ class Settings(BaseSettings):
     voyage_rerank_model: str = "rerank-3-lite"
 
     cors_origins: list[str] = ["http://localhost:3000"]
+
+    # The address this API is reached at from the internet: the MCP server's OAuth links are built from it.
+    # Render sets RENDER_EXTERNAL_URL by itself; set PUBLIC_URL when using a custom domain.
+    public_url: str = Field("http://localhost:8000", validation_alias=AliasChoices("PUBLIC_URL", "RENDER_EXTERNAL_URL"))
 
     # Signs the short-lived token the Next.js server sends with every request. Same value as API_JWT_SECRET in frontend/.env.
     api_jwt_secret: str

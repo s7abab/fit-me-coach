@@ -1,5 +1,7 @@
 import logging
 import time
+from contextlib import asynccontextmanager
+
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -7,6 +9,7 @@ from app.agent import run_agent
 from app.auth import current_user
 from app.config import settings
 from app.db import get_conn
+from app.mcp_server import http_app, mcp
 from app.health_sync import claim_sync, connection_state, save_connection, sync_user
 from app.overview import get_overview
 from app.schema import AskRequest, AskResponse, GoogleHealthTokens
@@ -17,7 +20,17 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger("fitmecoach")
 
 
-app = FastAPI(title="Fit Me Coach API", version="0.2.0")
+mcp_app = http_app()
+
+
+@asynccontextmanager
+async def lifespan(app):
+    # The MCP endpoint needs its session manager running for as long as the API is up
+    async with mcp.session_manager.run():
+        yield
+
+
+app = FastAPI(title="Fit Me Coach API", version="0.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -77,3 +90,7 @@ def dashboard(background: BackgroundTasks, days: int = Query(14, ge=1, le=30), u
             "metrics": get_daily_metrics(conn, user_id, args),
             "workouts": get_workouts(conn, user_id, args),
         }
+
+
+# The MCP server (/mcp) and its OAuth routes (/authorize, /token, /register...). Mounted last, so the routes above win.
+app.mount("/", mcp_app)
