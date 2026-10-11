@@ -3,6 +3,7 @@
 An AI health coach that reads your Fitbit / Google Health data (sleep, heart rate, HRV, steps, workouts) and gives **grounded, cited advice**, the way WHOOP Coach or Google's Fitbit coach does. Built end to end: RAG, a tool-calling agent, evals, auth, and deployment.
 
 **Live demo:** https://fit-me-coach.vercel.app/ · sign in with Google → ask *"Why am I so tired this week?"*
+
 **Demo video (2 min):** [Watch on Google Drive](https://drive.google.com/file/d/1bcY-zvM73Tpvi0Bw2Mmite1qbMMx4yoC/view?usp=sharing)
 
 > The backend runs on a free tier and sleeps when idle. The first request can take ~1 minute to wake it.
